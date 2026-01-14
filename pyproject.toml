@@ -1,0 +1,20 @@
+[project]
+name = "paralympics"
+version = "2025.0.1"
+dependencies = [
+    "dash",
+    "dash-bootstrap-components"
+]
+
+[build-system]
+requires = ["setuptools",  "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+# Pytest configuration see https://docs.pytest.org/en/stable/reference/customize.html
+# and https://docs.pytest.org/en/stable/reference/reference.html#ini-options-ref
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-rA -v"
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["ignore::DeprecationWarning"]
