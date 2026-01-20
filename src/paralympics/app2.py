@@ -63,7 +63,7 @@ barchart_checklist = html.Div(
                 {"label": "Winter", "value": "winter"},
                 {"label": "Summer", "value": "summer"},
             ],
-            value=[1],
+            value=[],
             id="checklist-barchart",
             inline=True,
         ),
@@ -76,18 +76,18 @@ row_one = dbc.Row(
             chart_select,
             line_select,
             barchart_checklist,
-        ]), width=4),
+        ], id="selectors"), width=4),
         dbc.Col(html.Div("Charts"), width=8),
     ]
 )
 
 row_two = dbc.Row(
     [
-        dbc.Col(html.Div("Questions")),
+        dbc.Col(html.Div("Questions will go here")),
     ]
 )
 
-lead = html.P("Use the chart to explore the data and answer the questions below.", className="lead")
+lead = html.P("Use the charts to explore the data and answer the questions below.", className="lead", id="intro")
 
 # Add an HTML layout to the Dash app
 # Start the layout with a Bootstrap container
