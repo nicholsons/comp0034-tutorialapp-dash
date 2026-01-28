@@ -5,151 +5,15 @@
  do not use this as an example for coursework 2!
 
  """
-import json
-import sqlite3
-from pathlib import Path
 from typing import Callable
 
-import pandas as pd
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
 
+from src.data.data import ParalympicsData
 
-def get_event_data():
-    """ Method to return the data from the paralympics .xlsx file.
-
-    NB: This is a simplified return of all data without validation.
-
-    Returns:
-        json_data: json format paralympics data
-
-    Raises:
-        RuntimeError: if the data could not be read, converted to JSON
-        FileNotFoundError: if no event file was found
-
-        """
-    data_file = Path(__file__).parent.joinpath("paralympics.xlsx")
-    try:
-        if not data_file.exists():
-            raise FileNotFoundError(f"Data file not found: {data_file}")
-        df = pd.read_excel(data_file)
-        if df.empty:
-            return []
-        json_data = df.to_json(orient='records')
-        return json_data
-    except FileNotFoundError:
-        raise
-    except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
-        raise RuntimeError(f"Error reading XLSX {data_file}: {e}") from e
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"Error decoding JSON from XLSX conversion: {e}") from e
-    except Exception as e:
-        raise RuntimeError(f"Unexpected error loading event data: {e}") from e
-
-
-class ParalympicsData:
-    """ Class representing the paralympics data in JSON format.
-
-    Each method returns all rows from a table as JSON.
-
-    Attributes:
-        database_file: path to the database file
-        tables: list of table names from the database
-
-    Methods:
-        get_table_as_json(self, table_name): Gets the data from the specified table and returns it as JSON
-        get_all_data(self): Gets data from joined tables and returns it as JSON
-
-    """
-
-    def __init__(self):
-        self.database_file = Path(__file__).parent.joinpath("paralympics.db")
-        if not self.database_file.exists():
-            raise FileNotFoundError(f"Database file not found: {self.database_file}")
-        self.tables = []
-        try:
-            conn = sqlite3.connect(self.database_file)
-            with conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_master'"
-                )
-                self.tables = [row[0] for row in cur.fetchall()]
-        except Exception as e:
-            raise RuntimeError(f"Error querying database tables: {e}") from e
-
-    def get_table_as_json(self, table_name):
-        """ Method to return the specified table data from the paralympics .db file.
-
-        Uses sqlite3 to access and query the database
-        Only accepts a table name if it exists in the database
-
-        Args:
-            table_name: name of the database table
-
-        Returns:
-            json_data: json format data
-        """
-        try:
-            conn = sqlite3.connect(self.database_file)
-            with conn:
-                conn.row_factory = sqlite3.Row  # Returns columns by names instead of tuples
-                cur = conn.cursor()
-                sql = f"SELECT * from {table_name}"
-                cur.execute(sql)
-                rows = cur.fetchall()
-                if not rows:
-                    return []
-                data = [dict(row) for row in rows]
-                return data
-        except Exception as e:
-            raise RuntimeError(f"Error querying table {table_name}: {e}") from e
-        finally:
-            if conn:
-                conn.close()
-
-    def get_all_data(self):
-        """ Method to return all data from the paralympics .db file.
-
-        Doesn't currently include URL, highlights or disabilities
-
-        Returns:
-            data: json format data
-
-        Raises:
-            e: Exception
-        """
-        sql = (
-            "SELECT country.country_name, games.event_type, games.year, games.start_date, "
-            "games.end_date, host.place_name, games.events, games.sports, games.countries, "
-            "games.participants_m, games.participants_f, games.participants, "
-            "host.latitude, host.longitude "
-            "FROM games "
-            "JOIN games_host ON games.id = games_host.games_id "
-            "JOIN host ON games_host.host_id = host.id "
-            "JOIN country ON host.country_id = country.id"
-        )
-        try:
-            conn = sqlite3.connect(self.database_file)
-            with conn:
-                conn.row_factory = sqlite3.Row  # Returns columns by names instead of tuples
-                cur = conn.cursor()
-                cur.execute(sql)
-                rows = cur.fetchall()
-                if not rows:
-                    return []
-                data = [dict(row) for row in rows]
-                return data
-        except Exception as e:
-            raise RuntimeError(f"Error querying tables: {e}") from e
-        finally:
-            if conn:
-                conn.close()
-
-
-# Minimal code to generate a REST API app with JSON format data
 app = FastAPI(title="Mock Paralympics API")
 
 origins = [
@@ -185,8 +49,8 @@ async def root(request: Request):
     raise HTTPException(status_code=404, detail="No API docs configured")
 
 
-def _make_route(table_name: str) -> Callable:
-    """ Method to return the route function """
+def _make_get_all_route(table_name: str) -> Callable:
+    """ Create a GET /<table> route to get all data from a table """
 
     async def _route():
         try:
@@ -199,12 +63,97 @@ def _make_route(table_name: str) -> Callable:
     return _route
 
 
-# create a GET route for each table at /{table}
+def _make_get_by_id_route(table_name: str) -> Callable:
+    """ Create a GET /<table>/{item_id} route to get a row by its primary key """
+
+    async def _route(item_id: int):
+        try:
+            row = data.get_row_by_id(table_name, item_id)
+            if row is None:
+                raise HTTPException(status_code=404, detail="Item not found")
+            return row
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    return _route
+
+
+def _make_search_route(table_name: str) -> Callable:
+    """
+    Create a GET '/<table>/search' route that accepts query parameters to filter rows.
+
+    Usage:
+    - Provide one or more query parameters where each key is a column name and the
+      value is the exact value to match.
+    - Multiple parameters are combined with logical AND.
+
+    Examples:
+    - /games/search?event_type=summer
+    - /games/search?event_type=summer&year=2020
+
+    Notes:
+    - Only columns that exist in the table are considered; unknown query keys are ignored.
+    - Matching is exact equality (\"column\" = ?). Wildcards/partial matches are not supported.
+    - If no valid query parameters are supplied, the endpoint returns all rows for the table.
+    """
+
+    async def _route(request: Request):
+        try:
+            params = dict(request.query_params)
+            return data.search_table(table_name, params)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    return _route
+
+
+def _make_post_route(table_name: str) -> Callable:
+    """
+    Create a POST '/<table>' route to insert a new row.
+
+    Usage:
+    - Send HTTP POST to /{table} with a JSON object body (Content-Type: application/json).
+    - Only keys that match existing column names are used; unknown keys are ignored.
+    - On success the endpoint returns the inserted row as JSON. If the table has a primary key
+      the returned row is fetched by that key; otherwise the row is returned using SQLite's rowid.
+
+    Responses:
+    - 200: inserted row as JSON.
+    - 400: request body is not a JSON object.
+    - 500: database or server errors (for example, no valid columns provided for insert).
+
+    Example:
+    curl -X POST 'http://localhost:8000/{table}' \\
+         -H 'Content-Type: application/json' \\
+         -d '{"column1":"value1","column2":123}'
+    """
+
+    async def _route(request: Request):
+        try:
+            payload = await request.json()
+            if not isinstance(payload, dict):
+                raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+            new_row = data.add_row(table_name, payload)
+            return new_row
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    return _route
+
+
+# create the routes for each table
 for _t in _tables:
-    app.get(f"/{_t}", name=_t)(_make_route(_t))
+    app.get(f"/{_t}", name=f"{_t}_all")(_make_get_all_route(_t))
+    app.get(f"/{_t}/search", name=f"{_t}_search")(_make_search_route(_t))
+    app.get(f"/{_t}/{{item_id}}", name=f"{_t}_get")(_make_get_by_id_route(_t))
+    app.post(f"/{_t}", name=f"{_t}_post")(_make_post_route(_t))
 
 
-# Create a root to data for the charts
+# Create a route to get data for the charts
 @app.get("/all")
 async def get_all():
     try:
