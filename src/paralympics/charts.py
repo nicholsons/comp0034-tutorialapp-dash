@@ -1,9 +1,10 @@
 import pandas as pd
+import plotly
 import plotly.express as px
 import requests
 
 
-def get_api_data(url):
+def get_api_data(url) -> pd.DataFrame:
     """ Gets the JSON data from the mock_api REST API
 
     Args:
@@ -19,7 +20,7 @@ def get_api_data(url):
     return df
 
 
-def line_chart(feature):
+def line_chart(feature) -> plotly.graph_objects.Figure:
     """ Creates a line chart with data from the mock_api
 
     Data is displayed over time from 1960 onwards.
@@ -91,6 +92,7 @@ def bar_chart(event_type):
     fig: Plotly Express bar chart
     """
     df = get_api_data("http://127.0.0.1:8000/all")
+    print(df.head())
     needed = ['event_type', 'year', 'place_name', 'participants_m', 'participants_f',
               'participants']
     df_plot = (
@@ -117,17 +119,3 @@ def bar_chart(event_type):
     fig.update_xaxes(ticklen=0)
     fig.update_yaxes(tickformat=".0%")
     return fig
-
-
-# Delete this, temporary use to check the charts display
-if __name__ == '__main__':
-    # fig_sport = line_chart("sports")
-    # fig_sport.show()
-    # fig_part = line_chart("participants")
-    # fig_part.show()
-
-    # fig_map = scatter_geo()
-    # fig_map.show()
-
-    fig_bar = bar_chart('winter')
-    fig_bar.show()
