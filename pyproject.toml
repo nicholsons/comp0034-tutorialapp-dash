@@ -3,11 +3,11 @@ name = "paralympics-dash"
 version = "2025.0.1"
 dependencies = [
     "dash",
-    "dash-bootstrap-components",
+    "dash-bootstrap-components==2.0.5a2",
     "pandas",
     "fastapi",
     "uvicorn",
-    "openpyxl"
+    "openpyxl",
 ]
 
 [build-system]

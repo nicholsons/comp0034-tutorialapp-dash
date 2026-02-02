@@ -1,3 +1,5 @@
+""" Note to students: at 400 lines this is not a good example of how to structure code for readability. """
+from typing import List
 import dash
 import dash_bootstrap_components as dbc
 import requests
@@ -5,6 +7,8 @@ from dash import Input, Output, State, dcc, html
 from dash.exceptions import PreventUpdate
 
 from paralympics import charts
+
+API_BASE_URL = "http://127.0.0.1:8000/"
 
 # --- APP INSTANCE AND CONFIG ---
 app = dash.Dash(
@@ -19,20 +23,8 @@ app = dash.Dash(
 # Prevents issues where callbacks rely on an id that is not present in the layout when the app runs
 app.config.suppress_callback_exceptions = True
 
+
 # --- HELPER FUNCTIONS ---
-
-chart_select = dbc.Select(
-    id='select-chart',
-    options=[
-        {"label": "How have the number of sports, events, countries, participants changed?",
-         "value": "line"},
-        {"label": "How has the number of male and female participants changed?", "value": "bar"},
-        {"label": "Where have the paralympics been hosted?", "value": "map"},
-    ],
-    placeholder="Choose the question you want to explore",
-)
-
-
 def create_linechart_select():
     """ Returns a select box to choose the feature for the line chart"""
     return dbc.Select(
@@ -67,7 +59,7 @@ def create_barchart_checklist():
 
 def get_number_questions():
     """ Helper to get the number of questions available"""
-    q_resp = requests.get(f"http://127.0.0.1:8000/question", timeout=2)
+    q_resp = requests.get(f"{API_BASE_URL}/question", timeout=2)
     q_resp.raise_for_status()
     questions = q_resp.json()
     return len(questions)
@@ -75,7 +67,7 @@ def get_number_questions():
 
 def get_question(qid: int):
     """ Helper to get the question"""
-    q_resp = requests.get(f"http://127.0.0.1:8000/question/{qid}", timeout=2)
+    q_resp = requests.get(f"{API_BASE_URL}/question/{qid}", timeout=2)
     q_resp.raise_for_status()
     q = q_resp.json()
     return q
@@ -83,7 +75,7 @@ def get_question(qid: int):
 
 def get_responses(qid: int):
     """ Helper to get the questions and responses for a given question id"""
-    r_resp = requests.get(f"http://127.0.0.1:8000/response/search?question_id={qid}", timeout=2)
+    r_resp = requests.get(f"{API_BASE_URL}/response/search?question_id={qid}", timeout=2)
     r_resp.raise_for_status()
     r = r_resp.json()
     return r
@@ -119,6 +111,30 @@ def create_question(q: dict):
     ]
 
 
+def add_responses_to_new_question(number) -> List[dbc.Row]:
+    """ Helper function to add responses to a new question
+
+    Args:
+        number (int): The number of response options to generate
+
+    Returns:
+        rows (List[dbc.Row]): A list of dbc components to add to UI
+        """
+    rows = []
+    for n in range(number):
+        rows.append(
+            dbc.Row([
+                dbc.Col(dbc.Input(id=f"response_text_{n}", required=True)),
+                dbc.Col(html.Div([
+                    dbc.Checkbox(id=f"is-correct_{n}", label="Correct response?", value=False),
+                    html.Br()
+                ])
+                ),
+            ])
+        )
+    return rows
+
+
 # --- LAYOUT ELEMENTS ---
 navbar = dbc.Navbar(children=[
     dbc.Container(children=[
@@ -143,49 +159,77 @@ navbar = dbc.Navbar(children=[
     dark=True,
 )
 
-row_one = dbc.Row(
-    [
-        dbc.Col(children=[
-            html.H2("Charts"),
-            chart_select,  # The initial selector to choose the chart, this is always present
-            html.Div(children=[], id="selectors")
-            # A div to add the extra selectors dependent on chart-type
-        ], width=4),
-        dbc.Col(html.Div("", id="chart-display"), width=8),
-    ]
+chart_select = dbc.Select(
+    id='select-chart',
+    options=[
+        {"label": "How have the number of sports, events, countries, participants changed?",
+         "value": "line"},
+        {"label": "How has the number of male and female participants changed?", "value": "bar"},
+        {"label": "Where have the paralympics been hosted?", "value": "map"},
+    ],
+    placeholder="Choose the question you want to explore",
 )
 
-row_two = dbc.Row(
-    [
-        dbc.Col(children=[
-            html.Hr(),
-            html.H2("Questions"),
-            # Store the question num. Start with 1.
-            # storage_type="session" means the index persists per tab;
-            # set to "memory" to reset on reload, or "local" to persist across tabs.
-            dcc.Store(id="q_index", data=1, storage_type="session"),
-            html.Div(id="question", children=create_question(get_question(1))),  # First question
-            html.Br(),
-            html.Div(id="result"),  # For messages/feedback
-        ])
-    ]
-)
+row_one = dbc.Row(children=[
+    dbc.Col(children=[
+        html.H2("Charts"),
+        chart_select,  # The initial selector to choose the chart, this is always present
+        html.Div(children=[], id="selectors")
+        # A div to add the extra selectors dependent on chart-type
+    ], width=4),
+    dbc.Col(html.Div("", id="chart-display"), width=8),
+])
+
+row_two = dbc.Row(children=[
+    dbc.Col(children=[
+        html.Hr(),
+        html.H2("Questions"),
+        # Store the question num. Start with 1.
+        # storage_type="session" means the index persists per tab;
+        # set to "memory" to reset on reload, or "local" to persist across tabs.
+        dcc.Store(id="q_index", data=1, storage_type="session"),
+        html.Div(id="question", children=create_question(get_question(1))),  # First question
+        html.Br(),
+        html.Div(id="result"),  # For messages/feedback
+    ])
+])
 
 lead = html.P("Use the charts to explore the data and answer the questions below.",
               className="lead", id="intro")
 
-# Add an HTML layout to the Dash app
-# Start the layout with a Bootstrap container
+question_form = html.Div(children=[
+    html.H2("Create a question"),
+    dbc.Form([dbc.Label("Question text"),
+              dbc.Textarea(
+                  id="question_text",
+                  placeholder="Enter the question text",
+                  style={"width": "100%"}
+              ),
+              html.Hr(),
+              html.H5("Add the four potential responses, indicate which is correct"),
+              html.Div(children=add_responses_to_new_question(4)),
+              dbc.Button("Add question", id="new-question-submit-button", color="primary"),
+              ])
+])
+
+# --- LAYOUT ---
 app.layout = dbc.Container(children=[
-    # Add the layout components in here
     navbar,
-    lead,
-    row_one,
-    row_two
+    dbc.Tabs([
+        dbc.Tab(label='Paralympics dashboard and questions', children=[
+            lead,
+            row_one,
+            row_two
+        ]),
+        dbc.Tab(label='Teacher admin', children=[
+            question_form,
+            html.Div(id="form-message")
+        ])
+    ])
 ], fluid=True)
 
 
-# Callbacks
+# --- CALLBACKS ---
 @app.callback(
     Output("chart-display", "children", allow_duplicate=True),
     Output("selectors", "children"),
@@ -310,7 +354,8 @@ def handle_submit(n_clicks, index, selected_response_id):
     if selected and selected.get("is_correct"):
         # Finish if last question
         if index >= num_q:
-            return num_q, [html.Div("Questions complete, well done!", className="alert alert-success")]
+            return num_q, [
+                html.Div("Questions complete, well done!", className="alert alert-success")]
         # Otherwise advance
         next_index = index + 1
         return next_index, ""
@@ -352,6 +397,70 @@ def render_question(index):
         return [html.Div(f"Unable to load question. {e}", className="alert alert-danger")]
 
     return create_question(q)
+
+
+@app.callback(
+    Output("form-message", "children"),
+    Input("new-question-submit-button", "n_clicks"),
+    State("question_text", "value"),
+    # states for the 4 response text inputs
+    [State(f"response_text_{i}", "value") for i in range(4)],
+    # states for the 4 checkboxes
+    [State(f"is-correct_{i}", "value") for i in range(4)],
+)
+def process_question_form(n_clicks, question_text, *states):
+    if not n_clicks:
+        raise PreventUpdate
+
+    # unpack variable-length *states
+    response_texts = states[:4]  # first 4 states
+    correctness_flags = states[4:]  # last 4 states
+
+    # Generate JSON for the question and responses
+    question = {"question_text": question_text}
+    responses = [
+        {"response_text": response_texts[i], "is_correct": correctness_flags[i]}
+        for i in range(4)
+    ]
+
+    # Validation
+    errors = []
+
+    if not question["question_text"] or not question["question_text"].strip():
+        errors.append(html.P("Question text is required."))
+
+    for idx, r in enumerate(responses, start=1):
+        if not r["response_text"] or not r["response_text"].strip():
+            errors.append(html.P(f"Option {idx} must have text."))
+    correct_count = sum(1 for r in responses if r["is_correct"])
+
+    if correct_count == 0:
+        errors.append(html.P("Please select exactly one correct response (none selected)."))
+    elif correct_count > 1:
+        errors.append(html.P("Please select exactly one correct response (multiple selected)."))
+
+    # Return the validation errors
+    if errors:
+        return errors
+
+    # Use the API to save the question to the database
+    payload = question
+    try:
+        response = requests.post(f"{API_BASE_URL}/question", json=payload)
+        response.raise_for_status()
+
+        # Get the id of the newly saved question from the response
+        question_id = response.json()["id"]
+
+        for idx, r in enumerate(responses, start=1):
+            r["question_id"] = question_id
+            resp = requests.post(f"{API_BASE_URL}/response", json=r)
+            resp.raise_for_status()
+        return "Question saved successfully."
+
+    except Exception as exc:
+        return html.P(f"Error saving question: {exc}")
+
 
 
 # Run the app
