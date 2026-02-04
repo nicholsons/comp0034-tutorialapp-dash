@@ -18,7 +18,7 @@ build-backend = "setuptools.build_meta"
 # and https://docs.pytest.org/en/stable/reference/reference.html#ini-options-ref
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-rA -v"
+addopts = "-rA -v --headed"
 testpaths = ["tests"]
 pythonpath = ["src"]
 filterwarnings = ["ignore::DeprecationWarning"]

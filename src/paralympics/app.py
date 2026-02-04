@@ -1,5 +1,6 @@
 """ Note to students: at 400 lines this is not a good example of how to structure code for readability. """
 from typing import List
+
 import dash
 import dash_bootstrap_components as dbc
 import requests
@@ -104,7 +105,6 @@ def create_question(q: dict):
     submit_btn = dbc.Button("Submit answer", id="submit-btn", n_clicks=0, color="primary")
     return [
         html.Label(q.get("question_text", ""), id="question-label"),
-        # html.P(q.get("id", ""), id="question-id", hidden=True),
         radio,
         html.Br(),
         submit_btn,
@@ -126,7 +126,7 @@ def add_responses_to_new_question(number) -> List[dbc.Row]:
             dbc.Row([
                 dbc.Col(dbc.Input(id=f"response_text_{n}", required=True)),
                 dbc.Col(html.Div([
-                    dbc.Checkbox(id=f"is-correct_{n}", label="Correct response?", value=False),
+                    dbc.Checkbox(id=f"is_correct_{n}", label="Correct response?", value=False),
                     html.Br()
                 ])
                 ),
@@ -406,7 +406,7 @@ def render_question(index):
     # states for the 4 response text inputs
     [State(f"response_text_{i}", "value") for i in range(4)],
     # states for the 4 checkboxes
-    [State(f"is-correct_{i}", "value") for i in range(4)],
+    [State(f"is_correct_{i}", "value") for i in range(4)],
 )
 def process_question_form(n_clicks, question_text, *states):
     if not n_clicks:
@@ -462,7 +462,5 @@ def process_question_form(n_clicks, question_text, *states):
         return html.P(f"Error saving question: {exc}")
 
 
-
-# Run the app
 if __name__ == '__main__':
     app.run(debug=True)

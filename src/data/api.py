@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
 
-from src.data.data import ParalympicsData
+from data.paralympics_data import ParalympicsData
 
 app = FastAPI(title="Mock Paralympics API")
 
@@ -165,4 +165,4 @@ async def get_all():
 
 
 if __name__ == "__main__":
-    uvicorn.run("src.data.mock_api:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("src.data.api:app", host="127.0.0.1", port=8000, reload=True)
